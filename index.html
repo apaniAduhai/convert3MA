@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Konverter 3MA ⇄ OBJ</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--fg:#1c1b19;--mut:#6b6860;--line:#dcd9d0;--acc:#2a5bd7;--accfg:#fff;--ok:#1f7a45;--err:#b3261e;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151514;--card:#1f1e1c;--fg:#efede6;--mut:#a09d94;--line:#34322e;--acc:#7da2ff;--accfg:#10131c;--ok:#5bd08a;--err:#ff8a80}}
+:root[data-theme="dark"]{--bg:#151514;--card:#1f1e1c;--fg:#efede6;--mut:#a09d94;--line:#34322e;--acc:#7da2ff;--accfg:#10131c;--ok:#5bd08a;--err:#ff8a80}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow-wrap:anywhere}
+main{width:100%;max-width:860px;margin:0 auto;padding:clamp(16px,4vw,48px) max(clamp(14px,4vw,32px),env(safe-area-inset-left,0px)) clamp(32px,6vw,64px) max(clamp(14px,4vw,32px),env(safe-area-inset-right,0px))}
+h1{font-size:clamp(1.3rem,1rem + 1.8vw,2rem);line-height:1.2;margin:0 0 6px}
+p.sub{margin:0 0 clamp(14px,3vw,24px);color:var(--mut);font-size:clamp(.92rem,.85rem + .3vw,1.05rem)}
+#drop{display:block;border:2px dashed var(--line);background:var(--card);border-radius:14px;padding:clamp(28px,8vw,72px) 16px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;-webkit-tap-highlight-color:transparent}
+#drop.over,#drop:hover{border-color:var(--acc)}
+#drop b{display:block;font-size:clamp(1rem,.9rem + .5vw,1.25rem);margin-bottom:4px}
+#drop span{color:var(--mut);font-size:.9rem}
+.opt{display:flex;gap:10px;align-items:center;margin:14px 2px;color:var(--mut);font-size:.95rem;min-height:44px;cursor:pointer}
+.opt input{width:20px;height:20px;flex:none;accent-color:var(--acc)}
+#out{margin-top:4px}
+.item{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:12px}
+.item .txt{flex:1 1 320px;min-width:0}
+.item h3{margin:0 0 2px;font-size:1rem}
+.item .st{color:var(--mut);font-size:.9rem}
+.item .err{color:var(--err)}
+.item button{flex:none;background:var(--acc);color:var(--accfg);border:0;border-radius:10px;padding:11px 18px;min-height:44px;font:inherit;font-weight:600;cursor:pointer;max-width:100%}
+.ok{color:var(--ok)}
+footer{margin-top:28px;color:var(--mut);font-size:.84rem}
+@media (max-width:520px){
+  .item button{width:100%}
+  #drop span{display:block}
+}
+@media (min-width:900px){
+  #drop{padding-block:72px}
+  .item{padding:16px 20px}
+}
+</style>
+</head>
+<body>
+<main>
+<h1>Konverter 3MA ⇄ OBJ</h1>
+<p class="sub">Seret file .3ma atau .obj. Arah konversi dikenali otomatis. Semua diproses di browser Anda; tidak ada yang diunggah ke server.</p>
+<label id="drop" for="f"><b>Pilih atau seret file ke sini</b><span>.3ma → .obj &nbsp;|&nbsp; .obj → .3ma (bisa banyak file)</span></label>
+<input id="f" type="file" accept=".3ma,.obj" multiple hidden>
+<label class="opt"><input type="checkbox" id="col" checked> Sertakan warna vertex saat 3MA → OBJ</label>
+<div id="out"></div>
+<footer>Catatan: hasil OBJ → 3MA belum diuji di aplikasi pembuat aslinya; periksa dulu sebelum dipakai.</footer>
+</main>
+<script>
+const PF=10000;
+const hex2=v=>Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,'0').toUpperCase();
+const fmt=n=>(+n.toFixed(6)).toString();
+
+function threeMaToObj(text,withColor){
+  const d=JSON.parse(text);
+  if(!d||!Array.isArray(d.meshes))throw new Error('Bukan file .3ma yang valid (tidak ada "meshes").');
+  const out=['# Dikonversi dari .3ma: '+(d.fileName||'model').trim()];
+  let vOff=0,nOff=0,uOff=0,tris=0,verts=0;
+  d.meshes.forEach((m,mi)=>{
+    const f=m.preciseFactor||PF,P=m._positions,pi=m._posIndexis,N=m._normals,U=m._uvs,C=m._colorsHtml,T=m.triangles;
+    const nv=P.length/3,nc=pi.length;
+    out.push('o mesh_'+(mi+1));
+    const col=new Array(nv);
+    if(withColor&&C)for(let c=0;c<nc;c++)if(!col[pi[c]])col[pi[c]]=C[c];
+    for(let i=0;i<nv;i++){
+      let s='v '+fmt(P[3*i]/f)+' '+fmt(P[3*i+1]/f)+' '+fmt(P[3*i+2]/f);
+      if(withColor&&col[i]){const h=col[i];s+=' '+fmt(parseInt(h.slice(0,2),16)/255)+' '+fmt(parseInt(h.slice(2,4),16)/255)+' '+fmt(parseInt(h.slice(4,6),16)/255)}
+      out.push(s);
+    }
+    const hasN=m.hasNormals&&N&&N.length===nc*3;
+    if(hasN)for(let c=0;c<nc;c++)out.push('vn '+fmt(N[3*c]/f)+' '+fmt(N[3*c+1]/f)+' '+fmt(N[3*c+2]/f));
+    const hasU=m.hasUVs&&U&&U.length===nc*2&&U.some(x=>x!==0);
+    if(hasU)for(let c=0;c<nc;c++)out.push('vt '+fmt(U[2*c]/f)+' '+fmt(U[2*c+1]/f));
+    for(let t=0;t<T.length;t+=3){
+      let s='f';
+      for(let k=0;k<3;k++){
+        const c=T[t+k],v=pi[c]+1+vOff;
+        s+=' '+v+(hasU?'/'+(c+1+uOff):'')+(hasN?(hasU?'':'/')+'/'+(c+1+nOff):'');
+      }
+      out.push(s);tris++;
+    }
+    vOff+=nv;verts+=nv;if(hasN)nOff+=nc;if(hasU)uOff+=nc;
+  });
+  return{data:out.join('\n')+'\n',info:d.meshes.length+' mesh, '+verts.toLocaleString('id')+' vertex, '+tris.toLocaleString('id')+' segitiga'};
+}
+
+function objToThreeMa(text,name){
+  const V=[],VN=[],VT=[],groups=[];let cur=null;
+  const idx=(s,len)=>{const n=parseInt(s,10);return n<0?len+n:n-1};
+  const newG=()=>{cur={f:[]};groups.push(cur)};
+  for(const raw of text.split('\n')){
+    const l=raw.trim();if(!l||l[0]==='#')continue;
+    const p=l.split(/\s+/),k=p[0];
+    if(k==='v')V.push([+p[1],+p[2],+p[3]]);
+    else if(k==='vn')VN.push([+p[1],+p[2],+p[3]]);
+    else if(k==='vt')VT.push([+p[1],+p[2]]);
+    else if(k==='o'||k==='g'){newG()}
+    else if(k==='f'){
+      if(!cur)newG();
+      const corners=p.slice(1).map(s=>{const a=s.split('/');return{v:idx(a[0],V.length),t:a[1]?idx(a[1],VT.length):-1,n:a[2]?idx(a[2],VN.length):-1}});
+      for(let i=1;i<corners.length-1;i++)cur.f.push([corners[0],corners[i],corners[i+1]]);
+    }
+  }
+  const use=groups.filter(g=>g.f.length);
+  if(!use.length)throw new Error('Tidak ditemukan face pada file OBJ.');
+  const meshes=[];let tris=0,verts=0;const mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];
+  for(const g of use){
+    const map=new Map(),pos=[],pidx=[],pcnt=[],nor=[],uvs=[],cols=[],seen=[];
+    for(const tri of g.f){
+      const a=V[tri[0].v],b=V[tri[1].v],c=V[tri[2].v];
+      const u=[b[0]-a[0],b[1]-a[1],b[2]-a[2]],w=[c[0]-a[0],c[1]-a[1],c[2]-a[2]];
+      let fn=[u[1]*w[2]-u[2]*w[1],u[2]*w[0]-u[0]*w[2],u[0]*w[1]-u[1]*w[0]];
+      const L=Math.hypot(...fn)||1;fn=fn.map(x=>x/L);
+      for(const cr of tri){
+        const v=V[cr.v];
+        const key=Math.round(v[0]*PF)+','+Math.round(v[1]*PF)+','+Math.round(v[2]*PF);
+        let id=map.get(key);
+        if(id===undefined){id=pos.length/3;map.set(key,id);pos.push(Math.round(v[0]*PF),Math.round(v[1]*PF),Math.round(v[2]*PF));seen.push(0)}
+        pidx.push(id);pcnt.push(seen[id]++);
+        const n=cr.n>=0&&VN[cr.n]?VN[cr.n]:fn;
+        nor.push(Math.round(n[0]*PF),Math.round(n[1]*PF),Math.round(n[2]*PF));
+        const t=cr.t>=0&&VT[cr.t]?VT[cr.t]:[0,0];
+        uvs.push(Math.round(t[0]*PF),Math.round(t[1]*PF));
+        cols.push('BBBBBB');
+        for(let q=0;q<3;q++){mn[q]=Math.min(mn[q],v[q]);mx[q]=Math.max(mx[q],v[q])}
+      }
+    }
+    const nt=g.f.length,tr=[],fo=[],fu=[];
+    for(let i=0;i<nt*3;i++)tr.push(i);
+    for(let i=0;i<nt;i++){fo.push(i);fu.push({u:[pidx[3*i],pidx[3*i+1],pidx[3*i+2]]})}
+    meshes.push({preciseFactor:PF,rotation:{x:0,y:0,z:0,w:1},facesOfTriangles:fo,
+      triangles:tr,facesUnivertsList:fu,materialIndex:1,hasMaterial:true,smoothNormals:false,primitiveType:2,primitiveOptions:[1,1,1,0],
+      smoothPixels:true,planarCounts:1,idTex:-1,textureScale:1,displayEdgesLengths:false,hasNormals:true,hasColors:true,hasUVs:true,
+      _uvs:uvs,_normals:nor,_positions:pos,_colorsHtml:cols,_posIndexis:pidx,_posCounter:pcnt});
+    tris+=nt;verts+=pos.length/3;
+  }
+  const ctr=mn.map((v,i)=>(v+mx[i])/2),size=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1;
+  const doc={saveVersion:7,fileName:name,camPivotPosition:{x:ctr[0],y:ctr[1],z:ctr[2]},camPivotRotation:{x:30,y:0,z:0},
+    cameraPosition:{x:ctr[0],y:ctr[1]+size*0.5,z:ctr[2]-size*2},meshes,lights:[],hasAmbient:true};
+  return{data:JSON.stringify(doc),info:meshes.length+' mesh, '+verts.toLocaleString('id')+' vertex, '+tris.toLocaleString('id')+' segitiga'};
+}
+
+/* ---- UI ---- */
+if(typeof document!=='undefined'){
+  const out=document.getElementById('out'),drop=document.getElementById('drop'),inp=document.getElementById('f');
+  async function handle(file){
+    const card=document.createElement('div');card.className='item';
+    card.innerHTML='<div class="txt"><h3></h3><div class="st">Memproses…</div></div>';card.querySelector('h3').textContent=file.name;
+    out.prepend(card);const st=card.querySelector('.st');
+    try{
+      const ext=file.name.split('.').pop().toLowerCase(),base=file.name.replace(/\.[^.]+$/,'');
+      const text=await file.text();let r,newName,mime;
+      await new Promise(r=>setTimeout(r,30));
+      if(ext==='3ma'){r=threeMaToObj(text,document.getElementById('col').checked);newName=base+'.obj';mime='text/plain'}
+      else if(ext==='obj'){r=objToThreeMa(text,base);newName=base+'.3ma';mime='application/json'}
+      else throw new Error('Format tidak didukung. Gunakan .3ma atau .obj.');
+      const url=URL.createObjectURL(new Blob([r.data],{type:mime}));
+      st.innerHTML='<span class="ok">Selesai</span> · '+r.info+' · '+(r.data.length/1048576).toFixed(2)+' MB';
+      const b=document.createElement('button');b.textContent='Unduh '+newName;
+      b.onclick=()=>{const a=document.createElement('a');a.href=url;a.download=newName;document.body.appendChild(a);a.click();a.remove()};
+      card.appendChild(b);
+    }catch(e){st.innerHTML='';const s=document.createElement('span');s.className='err';s.textContent='Gagal: '+e.message;st.appendChild(s)}
+  }
+  inp.onchange=()=>{[...inp.files].forEach(handle);inp.value=''};
+  ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
+  ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
+  drop.addEventListener('drop',ev=>[...ev.dataTransfer.files].forEach(handle));
+}
+</script>
+</body>
+</html>
